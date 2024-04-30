@@ -1,154 +1,55 @@
-name: Tests
-
+---
+# yamllint disable rule:truthy rule:truthy rule:line-length
+name: "CI"
 on:
-  - push
-  - pull_request
+  pull_request:
+  push:
+    branches:
+      - develop
+      - main
+      - stable
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  tests:
-    name: ${{ matrix.session }} ${{ matrix.python }} / ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # - { python: "3.10", os: "ubuntu-latest", session: "pre-commit" }
-          # - { python: "3.10", os: "ubuntu-latest", session: "safety" }
-          - { python: "3.11", os: "ubuntu-latest", session: "mypy" }
-          - { python: "3.10", os: "ubuntu-latest", session: "mypy" }
-          - { python: "3.9", os: "ubuntu-latest", session: "mypy" }
-          - { python: "3.8", os: "ubuntu-latest", session: "mypy" }
-          - { python: "3.7", os: "ubuntu-latest", session: "mypy" }
-          - { python: "3.11", os: "ubuntu-latest", session: "tests" }
-          - { python: "3.10", os: "ubuntu-latest", session: "tests" }
-          - { python: "3.9", os: "ubuntu-latest", session: "tests" }
-          - { python: "3.8", os: "ubuntu-latest", session: "tests" }
-          - { python: "3.7", os: "ubuntu-latest", session: "tests" }
-          # - { python: "3.10", os: "ubuntu-latest", session: "typeguard" }
-          - { python: "3.10", os: "ubuntu-latest", session: "xdoctest" }
-          # - { python: "3.10", os: "ubuntu-latest", session: "docs-build" }
-
-    env:
-      NOXSESSION: ${{ matrix.session }}
-      FORCE_COLOR: "1"
-      PRE_COMMIT_COLOR: "always"
-
+  lint:
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 5
     steps:
-      - name: Check out the repository
-        uses: actions/checkout@v3
+      - name: "Check out repository code"
+        uses: "actions/checkout@v3"
+      - name: "Setup environment"
+        run: |
+          pipx install poetry
+      - name: "Install Linters"
+        run: "poetry install --only=dev"
+      - name: "Linting"
+        run: "poetry run invoke lint"
 
-      - name: Set up Python ${{ matrix.python }}
+  python-tests:
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+    if: |
+      always() && !cancelled() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
+    needs: ["lint"]
+    runs-on: "ubuntu-latest"
+    timeout-minutes: 30
+    steps:
+      - name: "Check out repository code"
+        uses: "actions/checkout@v3"
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python }}
-
-      - name: Upgrade pip
+          python-version: ${{ matrix.python-version }}
+      - name: "Setup environment"
         run: |
-          pip install --constraint=.github/workflows/constraints.txt pip
-          pip --version
-
-      - name: Upgrade pip in virtual environments
-        shell: python
-        run: |
-          import os
-          import pip
-
-          with open(os.environ["GITHUB_ENV"], mode="a") as io:
-              print(f"VIRTUALENV_PIP={pip.__version__}", file=io)
-
-      - name: Install Poetry
-        run: |
-          pipx install --pip-args=--constraint=.github/workflows/constraints.txt poetry
-          poetry --version
-
-      - name: Install Nox
-        run: |
-          pipx install --pip-args=--constraint=.github/workflows/constraints.txt nox
-          pipx inject --pip-args=--constraint=.github/workflows/constraints.txt nox nox-poetry
-          nox --version
-
-      - name: Compute pre-commit cache key
-        if: matrix.session == 'pre-commit'
-        id: pre-commit-cache
-        shell: python
-        run: |
-          import hashlib
-          import sys
-
-          python = "py{}.{}".format(*sys.version_info[:2])
-          payload = sys.version.encode() + sys.executable.encode()
-          digest = hashlib.sha256(payload).hexdigest()
-          result = "${{ runner.os }}-{}-{}-pre-commit".format(python, digest[:8])
-
-          print("::set-output name=result::{}".format(result))
-
-      - name: Restore pre-commit cache
-        uses: actions/cache@v3
-        if: matrix.session == 'pre-commit'
-        with:
-          path: ~/.cache/pre-commit
-          key: ${{ steps.pre-commit-cache.outputs.result }}-${{ hashFiles('.pre-commit-config.yaml') }}
-          restore-keys: |
-            ${{ steps.pre-commit-cache.outputs.result }}-
-
-      - name: Run Nox
-        run: |
-          nox --python=${{ matrix.python }}
-
-      - name: Upload coverage data
-        if: always() && matrix.session == 'tests'
-        uses: "actions/upload-artifact@v3"
-        with:
-          name: coverage-data
-          path: ".coverage.*"
-
-      - name: Upload documentation
-        if: matrix.session == 'docs-build'
-        uses: actions/upload-artifact@v3
-        with:
-          name: docs
-          path: docs/_build
-
-  # coverage:
-  #   runs-on: ubuntu-latest
-  #   needs: tests
-  #   steps:
-  #     - name: Check out the repository
-  #       uses: actions/checkout@v3
-
-  #     - name: Set up Python
-  #       uses: actions/setup-python@v4
-  #       with:
-  #         python-version: "3.10"
-
-  #     - name: Upgrade pip
-  #       run: |
-  #         pip install --constraint=.github/workflows/constraints.txt pip
-  #         pip --version
-
-  #     - name: Install Poetry
-  #       run: |
-  #         pipx install --pip-args=--constraint=.github/workflows/constraints.txt poetry
-  #         poetry --version
-
-  #     - name: Install Nox
-  #       run: |
-  #         pipx install --pip-args=--constraint=.github/workflows/constraints.txt nox
-  #         pipx inject --pip-args=--constraint=.github/workflows/constraints.txt nox nox-poetry
-  #         nox --version
-
-  #     - name: Download coverage data
-  #       uses: actions/download-artifact@v3
-  #       with:
-  #         name: coverage-data
-
-  #     - name: Combine coverage data and display human readable report
-  #       run: |
-  #         nox --session=coverage
-
-  #     - name: Create coverage report
-  #       run: |
-  #         nox --session=coverage -- xml
-
-  #     # - name: Upload coverage report
-  #     #   uses: codecov/codecov-action@v3.1.1
+          pipx install poetry
+      - name: "Install nornir-dispatch"
+        run: "poetry install --with dev"
+      - name: "Pytest Tests"
+        run: "poetry run invoke tests"
