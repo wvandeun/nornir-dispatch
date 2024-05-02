@@ -1,6 +1,4 @@
-from nornir.core.task import Result
-from nornir.core.task import Task
-
+from nornir.core.task import Result, Task
 from nornir_dispatch import registry
 
 
@@ -14,10 +12,7 @@ def dispatcher(task: Task, action: str, *args, **kwargs) -> Result:  # type: ign
     Returns:
         Result: Nornir Task result.
     """
+    task.name = action
     task_to_run = registry.get_task(platform=task.host.platform, action=action)
-    result = task.run(task=task_to_run, *args, **kwargs)  # type: ignore
+    return task_to_run(task=task, *args, **kwargs)  # type: ignore
 
-    return Result(
-        host=task.host,
-        result=result,
-    )

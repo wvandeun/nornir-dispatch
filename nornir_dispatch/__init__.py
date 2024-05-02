@@ -3,16 +3,13 @@ from __future__ import annotations
 import importlib
 import logging
 from collections import defaultdict
-from dataclasses import dataclass
-from dataclasses import field
-from typing import Any
-from typing import Callable
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Callable
 
-from nornir.core.task import Result
+if TYPE_CHECKING:
+    from nornir.core.task import Result
 
-from nornir_dispatch.exceptions import PlatformNotFoundError
-from nornir_dispatch.exceptions import TaskNotFoundError
-
+from nornir_dispatch.exceptions import PlatformNotFoundError, TaskNotFoundError
 
 LOGGER = logging.getLogger(__name__)
 

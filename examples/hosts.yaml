@@ -1,0 +1,11 @@
+---
+device1:
+  platform: "junos"
+  hostname: "1.1.1.1"
+  username: "something"
+  password: "something_esle"
+device2:
+  platform: "ios"
+  hostname: "1.1.1.2"
+  username: "something"
+  password: "something_esle"
